@@ -1,7 +1,7 @@
 # Main runner for Sniper bot
 import traceback
 import time
-from telegram import TelegramBot
+from telegram_bot import TelegramBot
 from strategy_expiry import run_expiry_strategy
 from strategy_swing import run_swing_strategy
 
