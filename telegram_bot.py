@@ -3,8 +3,7 @@ telegram_bot.py
 import telebot
 import os
 
-BOT_TOKEN = 
-os.getenv("TELEGRAM_BOT_TOKEN") 
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") 
 # Your Telegram user ID or channel ID
 
