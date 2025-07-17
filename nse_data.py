@@ -1,81 +1,38 @@
-# nse_data.py
+nse_data.py
 
-import requests
-import datetime
+import requests from datetime import datetime import pytz
 
-def get_current_expiry():
-    """
-    Gets the nearest Thursday expiry from today.
-    If today is Thursday before 3:30 PM, returns today.
-    If it's Friday or expiry has passed, gives next Thursday.
-    """
-    today = datetime.date.today()
-    weekday = today.weekday()
+NSE_BASE_URL = "https://www.nseindia.com/api" HEADERS = { "User-Agent": "Mozilla/5.0", "Accept-Language": "en-US,en;q=0.9", }
 
-    if weekday == 3 and datetime.datetime.now().time() < datetime.time(15, 30):
-        return today.strftime('%d-%b-%Y').upper()
-    
-    days_ahead = 3 - weekday if weekday <= 3 else 10 - weekday
-    next_expiry = today + datetime.timedelta(days=days_ahead)
-    return next_expiry.strftime('%d-%b-%Y').upper()
+def get_index_futures_price(symbol): """ Fetch live futures price of given index (NIFTY, BANKNIFTY, SENSEX) """ try: url = f"https://www.nseindia.com/api/quote-derivative?symbol={symbol.upper()}" response = requests.get(url, headers=HEADERS, timeout=10) data = response.json() for item in data.get("stocks", []): if item.get("metadata", {}).get("instrumentType") == "FUTIDX": return float(item["metadata"]["lastPrice"]) return None except Exception as e: print(f"[NSE DATA] Error fetching futures price for {symbol}: {e}") return None
 
-def get_futures_price(symbol):
-    """
-    Fetch current futures LTP from NSE India
-    """
-    url = f"https://www.nseindia.com/api/quote-derivative?symbol={symbol}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        data = response.json()
-        for item in data['stocks']:
-            if item['metadata']['instrumentType'] == 'FUTIDX':
-                return float(item['metadata']['lastPrice'])
-        return None
-    except:
-        print(f"[NSE] Failed to fetch futures price for {symbol}")
-        return None
+def get_expiry_date(symbol): """ Get next expiry date for index """ try: url = f"{NSE_BASE_URL}/option-chain-indices?symbol={symbol.upper()}" response = requests.get(url, headers=HEADERS, timeout=10) data = response.json() expiry_dates = data.get("records", {}).get("expiryDates", []) if expiry_dates: tz = pytz.timezone("Asia/Kolkata") dt = datetime.strptime(expiry_dates[0], "%d-%b-%Y").astimezone(tz) return dt.strftime("%Y-%m-%d") return None except Exception as e: print(f"[NSE DATA] Error fetching expiry for {symbol}: {e}") return None
 
-def get_option_chain(symbol):
-    """
-    Get full option chain from NSE
-    """
-    url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        data = response.json()['records']['data']
-        option_chain = []
+def get_option_chain(symbol): """ Get full option chain for the symbol """ try: url = f"{NSE_BASE_URL}/option-chain-indices?symbol={symbol.upper()}" response = requests.get(url, headers=HEADERS, timeout=10) data = response.json() records = data.get("records", {}) option_data = records.get("data", []) flat_chain = []
 
-        for item in data:
-            strike = item.get('strikePrice')
-            ce = item.get('CE')
-            pe = item.get('PE')
+for item in option_data:
+        strike = item.get("strikePrice")
+        ce_data = item.get("CE")
+        pe_data = item.get("PE")
 
-            if ce:
-                option_chain.append({
-                    "strike": ce['strikePrice'],
-                    "type": "CE",
-                    "last_price": ce['lastPrice']
-                })
-            if pe:
-                option_chain.append({
-                    "strike": pe['strikePrice'],
-                    "type": "PE",
-                    "last_price": pe['lastPrice']
-                })
+        if ce_data:
+            flat_chain.append({
+                "strike": strike,
+                "type": "CE",
+                "last_price": ce_data.get("lastPrice", 0),
+                "oi": ce_data.get("openInterest", 0)
+            })
 
-        return option_chain
-    except:
-        print(f"[NSE] Failed to fetch option chain for {symbol}")
-        return []
+        if pe_data:
+            flat_chain.append({
+                "strike": strike,
+                "type": "PE",
+                "last_price": pe_data.get("lastPrice", 0),
+                "oi": pe_data.get("openInterest", 0)
+            })
 
-def is_nse_live():
-    """
-    Ping NSE homepage to check if it's live
-    """
-    try:
-        response = requests.get("https://www.nseindia.com", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
+    return flat_chain
+except Exception as e:
+    print(f"[NSE DATA] Error fetching option chain for {symbol}: {e}")
+    return []
+
