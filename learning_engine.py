@@ -4,70 +4,57 @@ import json
 import os
 from datetime import datetime
 
-LEARNING_LOG_FILE = "learning_log.json"
+LEARNING_LOG_PATH = "learning_log.json"
 
-def log_trade_learning(trade_context: dict):
+def record_trade_learning(signal, outcome, notes=""):
     """
-    Store insights about trade setups and outcomes.
-    Example context:
-    {
-        "date": "2025-07-17",
-        "strategy": "expiry",
-        "signal_strength": "strong",
-        "entry_reason": "RSI + MA + LR Slope",
-        "exit_reason": "Target hit",
-        "pnl_percent": 85,
-        "fake_breakout": False,
-        "theta_decay_impact": "low"
-    }
+    Log the trade context and outcome into the learning log.
     """
-    if not os.path.exists(LEARNING_LOG_FILE):
-        with open(LEARNING_LOG_FILE, "w") as f:
-            json.dump([], f)
+    try:
+        entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "signal": signal,  # e.g. all indicators snapshot
+            "outcome": outcome,  # "win", "loss", "exit", "no_trade"
+            "notes": notes
+        }
 
-    with open(LEARNING_LOG_FILE, "r") as f:
-        logs = json.load(f)
+        if not os.path.exists(LEARNING_LOG_PATH):
+            with open(LEARNING_LOG_PATH, "w") as f:
+                json.dump([entry], f, indent=4)
+        else:
+            with open(LEARNING_LOG_PATH, "r") as f:
+                data = json.load(f)
+            data.append(entry)
+            with open(LEARNING_LOG_PATH, "w") as f:
+                json.dump(data, f, indent=4)
 
-    logs.append(trade_context)
+        print(f"[Learning] Logged trade outcome: {outcome}")
+    except Exception as e:
+        print(f"[Learning Engine] Failed to log trade: {e}")
 
-    with open(LEARNING_LOG_FILE, "w") as f:
-        json.dump(logs, f, indent=2)
 
-
-def analyze_learning():
+def analyze_past_failures():
     """
-    Reads past learning log and prints summarized insights.
+    Review past losses to find patterns – e.g., mild signals, low volume, etc.
+    Returns: List of reasons if found common patterns
     """
-    if not os.path.exists(LEARNING_LOG_FILE):
-        print("📭 No learning data found.")
-        return
+    try:
+        if not os.path.exists(LEARNING_LOG_PATH):
+            print("[Learning] No learning log found.")
+            return []
 
-    with open(LEARNING_LOG_FILE, "r") as f:
-        logs = json.load(f)
+        with open(LEARNING_LOG_PATH, "r") as f:
+            data = json.load(f)
 
-    total = len(logs)
-    fake_breakouts = sum(1 for log in logs if log.get("fake_breakout"))
-    avg_pnl = sum(log.get("pnl_percent", 0) for log in logs) / total if total else 0
+        failure_patterns = {}
+        for entry in data:
+            if entry["outcome"] == "loss":
+                reason = entry.get("notes", "unknown")
+                failure_patterns[reason] = failure_patterns.get(reason, 0) + 1
 
-    print(f"📊 Total trades logged: {total}")
-    print(f"⚠️ Fake breakouts: {fake_breakouts}")
-    print(f"💰 Average PnL: {avg_pnl:.2f}%")
+        sorted_patterns = sorted(failure_patterns.items(), key=lambda x: x[1], reverse=True)
+        return sorted_patterns
 
-    # Optional: flag signals with repeat patterns
-    strong_success = [log for log in logs if log["signal_strength"] == "strong" and log["pnl_percent"] > 50]
-    print(f"✅ Strong signals with >50% PnL: {len(strong_success)}")
-
-
-# Example Usage (inside expiry/swing strategy):
-# from learning_engine import log_trade_learning
-# log_trade_learning({
-#     "date": datetime.now().strftime("%Y-%m-%d"),
-#     "strategy": "expiry",
-#     "signal_strength": "strong",
-#     "entry_reason": "MA cross + RSI + Volume",
-#     "exit_reason": "Reversal",
-#     "pnl_percent": -40,
-#     "fake_breakout": True,
-#     "theta_decay_impact": "high"
-# })
-
+    except Exception as e:
+        print(f"[Learning Engine] Error analyzing past failures: {e}")
+        return []
