@@ -1,4 +1,4 @@
-telegram_bot.py
+telegram_commands.py
 
 import telebot
 import os
