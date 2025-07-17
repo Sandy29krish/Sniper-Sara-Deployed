@@ -1,77 +1,107 @@
 strategy_expiry.py
 
-import time from utils.indicators import calculate_indicators from utils.lot_manager import calculate_lot_size, filter_otm_option_chain from utils.nse_data import fetch_nse_option_chain, get_future_price, get_expiry_date from utils.learning_engine import learn_from_trade from utils.telegram_bot import send_telegram_message from utils.trade_log import log_trade from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
+import time
+from utils.indicators import calculate_indicators
+from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
+from utils.nse_data import fetch_nse_option_chain, get_future_price, get_expiry_date
+from utils.learning_engine import learn_from_trade
+from utils.telegram_bot import send_telegram_message
+from utils.trade_log import log_trade
+from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
-def run_expiry_strategy(): print("[Expiry Strategy] Initializing...") for symbol in SYMBOLS: try: expiry_date = get_expiry_date(symbol) future_price = get_future_price(symbol) print(f"[{symbol}] Expiry: {expiry_date}, Future Price: {future_price}")
 
-direction, signal_strength = calculate_indicators(symbol, timeframe="1minute", mode="expiry")
-        if not direction or signal_strength < 3:
-            print(f"[{symbol}] No strong signal or direction yet. Skipping.")
-            continue
+def run_expiry_strategy():
+    print("[Expiry Strategy] Initializing...")
+    for symbol in SYMBOLS:
+        try:
+            expiry_date = get_expiry_date(symbol)
+            future_price = get_future_price(symbol)
+            print(f"[{symbol}] Expiry: {expiry_date}, Future Price: {future_price}")
 
-        option_chain = fetch_nse_option_chain(symbol)
-        otm_option = filter_otm_option_chain(option_chain, future_price, direction, MAX_PREMIUM)
-        if not otm_option:
-            print(f"[{symbol}] No valid OTM option found.")
-            continue
+            direction, signal_strength = calculate_indicators(symbol, timeframe="1minute", mode="expiry")
+            if not direction or signal_strength < 4:
+                print(f"[{symbol}] No strong signal or direction. Skipping.")
+                continue
 
-        premium = otm_option["last_price"]
-        strike = otm_option["strike"]
-        lots, capital_used = calculate_lot_size(CAPITAL, premium, symbol)
-        if lots == 0:
-            print(f"[{symbol}] Not enough capital for even 1 lot.")
-            continue
+            option_chain = fetch_nse_option_chain(symbol)
+            selected_option = filter_otm_option_chain(
+                option_chain, future_price, direction, MAX_PREMIUM
+            )
+            if not selected_option:
+                print(f"[{symbol}] No suitable OTM option found.")
+                continue
 
-        message = f"\n🚀 Expiry Signal for {symbol}\nDirection: {direction}\nStrike: {strike}\nPremium: {premium}\nLots: {lots}\nCapital Used: ₹{capital_used}"
-        send_telegram_message(message)
+            strike = selected_option["strikePrice"]
+            ltp = selected_option["lastPrice"]
+            lots = calculate_lot_size(symbol, CAPITAL, ltp)
 
-        log_trade("ENTRY", symbol, direction, strike, premium, lots, "LIVE", reason="Confirmed signal")
+            send_telegram_message(
+                f"📥 Entry: {symbol} {direction} {strike} @ {ltp} | Lots: {lots}"
+            )
+            log_trade("ENTRY", symbol, direction, strike, ltp, lots, STRATEGY_MODE)
 
-        monitor_trade(symbol, direction, strike, premium, lots)
+            monitor_trade(symbol, direction, strike, ltp, lots)
 
-    except Exception as e:
-        print(f"[Expiry Strategy] Error processing {symbol}: {e}")
+        except Exception as e:
+            print(f"[Expiry Strategy] Error: {e}")
 
-def monitor_trade(symbol, direction, strike, entry_price, lots): try: stoploss_hit = False partial_exit_done = False full_exit_done = False entry_time = time.time()
 
-while True:
-        time.sleep(30)  # Poll every 30 seconds
+def monitor_trade(symbol, direction, strike, entry_price, lots):
+    print(f"[Monitor] Monitoring {symbol} {strike}...")
+    start_time = time.time()
+    stoploss_hit = False
+    full_exit_done = False
+    reason = ""
 
-        current_price = get_option_price(symbol, strike, direction)
-        elapsed_minutes = (time.time() - entry_time) / 60
+    while True:
+        try:
+            time.sleep(60)  # 1-minute candle wait
+            elapsed_minutes = (time.time() - start_time) / 60
+            current_price = get_option_price(symbol, strike, direction)
 
-        if current_price <= entry_price * 0.65:
-            stoploss_hit = True
-            reason = "SL Hit (35% drop)"
+            if current_price <= entry_price * 0.65:
+                stoploss_hit = True
+                reason = "Stop Loss Hit"
 
-        elif not partial_exit_done and entry_price * 1.85 <= current_price <= entry_price * 2.0:
-            partial_exit_done = True
-            reason = "Tier-1 Target Hit (185-200%)"
-            send_telegram_message(f"🔔 Partial Exit: {symbol} {direction} {strike} @ {current_price} ({reason})")
-            log_trade("PARTIAL EXIT", symbol, direction, strike, current_price, lots // 2, "LIVE", reason=reason)
+            elif current_price >= entry_price * 1.85:
+                send_telegram_message(
+                    f"💰 Tier-1 Profit Booking: {symbol} {direction} {strike} @ {current_price} (185%)"
+                )
+                log_trade("PARTIAL EXIT", symbol, direction, strike, current_price, lots // 2, "LIVE", reason="Tier-1 Target Hit")
 
-        elif partial_exit_done and current_price >= entry_price * 2.2:
-            full_exit_done = True
-            reason = "Tier-2 Target Hit (220%)"
+            elif current_price >= entry_price * 2.2:
+                full_exit_done = True
+                reason = "Tier-2 Target Hit (220%)"
 
-        elif elapsed_minutes >= 195:
-            full_exit_done = True
-            reason = "Time-based Exit (3:15 PM)"
+            elif elapsed_minutes >= 195:
+                full_exit_done = True
+                reason = "Time-based Exit (3:15 PM)"
 
-        elif is_reversal_detected(symbol, direction):
-            full_exit_done = True
-            reason = "Reversal Detected"
+            elif is_reversal_detected(symbol, direction):
+                full_exit_done = True
+                reason = "Reversal Detected"
 
-        if stoploss_hit or full_exit_done:
-            send_telegram_message(f"🔴 Exit: {symbol} {direction} {strike} @ {current_price} ({reason})")
-            log_trade("FULL EXIT", symbol, direction, strike, current_price, lots if stoploss_hit else lots // 2, "LIVE", reason=reason)
-            learn_from_trade(symbol, direction, entry_price, current_price, reason, strategy="expiry")
-            break
+            if stoploss_hit or full_exit_done:
+                send_telegram_message(
+                    f"🔴 Exit: {symbol} {direction} {strike} @ {current_price} ({reason})"
+                )
+                log_trade(
+                    "FULL EXIT", symbol, direction, strike, current_price,
+                    lots if stoploss_hit else lots // 2, "LIVE", reason=reason
+                )
+                learn_from_trade(symbol, direction, entry_price, current_price, reason, strategy="expiry")
+                break
 
-except Exception as e:
-    print(f"[Monitor] Error: {e}")
+        except Exception as e:
+            print(f"[Monitor] Error: {e}")
 
-def get_option_price(symbol, strike, direction): # Placeholder for live price fetch return 60.0
 
-def is_reversal_detected(symbol, direction): # Placeholder for reversal logic based on 2-candle close below return False
+# === Placeholder functions ===
+def get_option_price(symbol, strike, direction):
+    # TODO: Replace with live API to fetch current premium
+    return 60.0
 
+
+def is_reversal_detected(symbol, direction):
+    # TODO: Replace with proper logic based on 2-candle structure
+    return False
