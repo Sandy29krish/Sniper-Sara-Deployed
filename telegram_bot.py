@@ -1,46 +1,19 @@
-# telegram_bot.py
+telegram_bot.py
 
-import telebot
-import os
+import telebot import os
 
-class TelegramBot:
-    def __init__(self):
-        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        self.bot = telebot.TeleBot(self.token)
-        self.mode = "STOPPED"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")  # Your Telegram user ID or channel ID
 
-        @self.bot.message_handler(commands=["start_sniper"])
-        def start_command(message):
-            self.mode = "ACTIVE"
-            self.bot.reply_to(message, "✅ Sniper bot started.")
-        
-        @self.bot.message_handler(commands=["stop_sniper"])
-        def stop_command(message):
-            self.mode = "STOPPED"
-            self.bot.reply_to(message, "🛑 Sniper bot stopped.")
+bot = telebot.TeleBot(BOT_TOKEN)
 
-        @self.bot.message_handler(commands=["status"])
-        def status_command(message):
-            self.bot.reply_to(message, f"📡 Current bot status: {self.mode}")
+STATUS = {"active": False, "mode": "IDLE"}  # Global bot control
 
-        @self.bot.message_handler(commands=["pnl"])
-        def pnl_command(message):
-            try:
-                from trade_logger import get_today_summary
-                summary = get_today_summary()
-                self.bot.reply_to(message, summary)
-            except Exception as e:
-                self.bot.reply_to(message, f"⚠️ Error fetching PnL: {e}")
+def send_telegram_message(message): try: bot.send_message(CHAT_ID, message) except Exception as e: print(f"[Telegram] Failed to send message: {e}")
 
-    def send_message(self, msg):
-        try:
-            self.bot.send_message(self.chat_id, msg)
-        except Exception as e:
-            print(f"[TelegramBot] Failed to send message: {e}")
+========================= Command Handlers =============================
 
-    def run(self):
-        self.bot.polling(non_stop=True)
+@bot.message_handler(commands=["start_sniper"]) def start_command(message): STATUS["active"] = True STATUS["mode"] = "LIVE" send_telegram_message("✅ Sniper bot started. Monitoring live market conditions...")
 
-    def is_active(self):
-        return self.mode == "ACTIVE"
+@bot.message_handler(commands=["stop_sniper"]) def stop_command(message): STATUS["active"] = False STATUS["mode"] = "STOPPED" send_telegram_message("🛑 Sniper bot stopped by user.")
+
+@bot.message_handler(commands=["status"]) def status_command(message): status_msg = f"🤖 Bot Status
