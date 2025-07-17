@@ -16,8 +16,7 @@ def send_telegram_message(message):
         bot.send_message(CHAT_ID, message)
     except Exception as e:
         print(f"[Telegram Error] {e}")
-========================= Command Handlers =============================
-
+# ======================== Command Handlers ========================
 @bot.message_handler(commands=["start_sniper"]) def start_command(message): STATUS["active"] = True STATUS["mode"] = "LIVE" send_telegram_message("✅ Sniper bot started. Monitoring live market conditions...")
 
 @bot.message_handler(commands=["stop_sniper"]) def stop_command(message): STATUS["active"] = False STATUS["mode"] = "STOPPED" send_telegram_message("🛑 Sniper bot stopped by user.")
