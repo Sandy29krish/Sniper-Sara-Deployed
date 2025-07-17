@@ -1,5 +1,3 @@
-strategy_expiry.py
-
 import time
 from utils.indicators import calculate_indicators
 from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
