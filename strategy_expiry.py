@@ -14,73 +14,77 @@ from datetime import datetime
 import time
 import json
 
-
-def run_expiry_strategy():
+def run_expiry_strategy(symbols=["BANKNIFTY", "NIFTY", "SENSEX"], capital=230000, lot_size=15, max_premium=60):
     telegram = TelegramBot()
-    telegram.send_message("🚀 Sniper Expiry Strategy Started")
+    telegram.send_message(f"🚀 Sniper Expiry Strategy Started")
 
-    symbol = "BANKNIFTY"
-    capital = 220000
-    lot_size = 15
-    max_premium = 60
+    for symbol in symbols:
+        try:
+            telegram.send_message(f"📡 Scanning {symbol}")
 
-    # Step 1: Get expiry and spot price
-    expiry_list = get_expiry_dates(symbol)
-    if not expiry_list:
-        telegram.send_message("❌ No expiry data found.")
-        return
+            expiry_list = get_expiry_dates(symbol)
+            if not expiry_list:
+                telegram.send_message(f"❌ No expiry data for {symbol}")
+                continue
 
-    expiry = expiry_list[0]
-    spot_price = get_spot_price(symbol)
-    if not spot_price:
-        telegram.send_message("❌ Spot price fetch failed.")
-        return
+            expiry = expiry_list[0]
+            spot_price = get_spot_price(symbol)
+            if not spot_price:
+                telegram.send_message(f"❌ Failed to fetch spot price for {symbol}")
+                continue
 
-    option_chain = get_option_chain_data(symbol, expiry)
-    if not option_chain:
-        telegram.send_message("❌ Option chain data unavailable.")
-        return
+            option_chain = get_option_chain_data(symbol, expiry)
+            if not option_chain:
+                telegram.send_message(f"❌ Option chain unavailable for {symbol}")
+                continue
 
-    # Step 2: Filter next OTM strike
-    direction = "CE"  # Placeholder for signal direction
-    otm_option = filter_otm_option_chain(option_chain, spot_price, direction, max_price=max_premium)
-    if not otm_option:
-        telegram.send_message("❌ No suitable OTM option found.")
-        return
+            # Determine direction from signal (placeholder)
+            direction = detect_signal_direction(symbol)
+            if not direction:
+                telegram.send_message(f"⚠️ No signal for {symbol}, skipping.")
+                continue
 
-    premium = otm_option["last_price"]
-    strike = otm_option["strike"]
+            otm_option = filter_otm_option_chain(option_chain, spot_price, direction, max_price=max_premium)
+            if not otm_option:
+                telegram.send_message(f"❌ No OTM option found for {symbol}")
+                continue
 
-    lots, used_capital = calculate_lot_size(capital, premium, lot_size)
-    if lots == 0:
-        telegram.send_message("❌ Capital insufficient for trade.")
-        return
+            premium = otm_option["last_price"]
+            strike = otm_option["strike"]
 
-    entry_time = datetime.now().strftime("%H:%M:%S")
-    telegram.send_message(
-        f"✅ Entry Triggered\nSymbol: {symbol}\nStrike: {strike} {direction}\nPremium: {premium}\nLots: {lots}\nCapital Used: ₹{used_capital}\nTime: {entry_time}"
-    )
+            lots, used_capital = calculate_lot_size(capital, premium, lot_size)
+            if lots == 0:
+                telegram.send_message(f"❌ Insufficient capital for {symbol}")
+                continue
 
-    # Simulate execution delay
-    time.sleep(2)
+            # Entry Alert
+            entry_time = datetime.now().strftime("%H:%M:%S")
+            telegram.send_message(
+                f"✅ Entry\n{symbol} | {strike} {direction}\nPremium: {premium} | Lots: {lots}\nCapital Used: ₹{used_capital}\nTime: {entry_time}"
+            )
 
-    # Step 3: Simulate Exit
-    exit_price = round(premium * 1.75, 2)  # Simulated 75% profit
-    exit_time = datetime.now().strftime("%H:%M:%S")
-    telegram.send_message(
-        f"💰 Exit Triggered\nStrike: {strike} {direction}\nExit Price: {exit_price}\nTime: {exit_time}"
-    )
+            time.sleep(2)
 
-    # Step 4: Learning Log
-    log_trade_learning({
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "strategy": "expiry",
-        "signal_strength": "strong",
-        "entry_reason": "All conditions met",
-        "exit_reason": "Target hit",
-        "pnl_percent": 75,
-        "fake_breakout": False,
-        "theta_decay_impact": "low"
-    })
+            # Simulated Exit
+            exit_price = round(premium * 1.75, 2)
+            exit_time = datetime.now().strftime("%H:%M:%S")
+            telegram.send_message(
+                f"💰 Exit\n{symbol} | {strike} {direction}\nExit Price: {exit_price}\nTime: {exit_time}"
+            )
 
-    telegram.send_message("📘 Trade logged for learning.")
+            log_trade_learning({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "strategy": "expiry",
+                "symbol": symbol,
+                "signal_strength": "strong",
+                "entry_reason": "All conditions met",
+                "exit_reason": "Target hit",
+                "pnl_percent": 75,
+                "fake_breakout": False,
+                "theta_decay_impact": "low"
+            })
+
+            telegram.send_message(f"📘 {symbol} trade logged for learning.")
+
+        except Exception as e:
+            telegram.send_message(f"❌ Error in {symbol} processing: {str(e)}")
