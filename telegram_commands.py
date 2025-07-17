@@ -44,3 +44,15 @@ def pnl_command(message):
             send_telegram_message(f"📊 Trades:\n{json.dumps(data, indent=2)}")
     except:
         send_telegram_message("⚠️ No trade log found or error reading the file.")
+def start_bot_listener():
+    print("[Telegram] Bot listener started.")
+    bot.polling(none_stop=True)
+
+def is_bot_active():
+    return STATUS["active"]
+
+def get_bot_mode():
+    return STATUS["mode"]
+    # Optional: to auto-start in dev environment
+if __name__ == "__main__":
+    start_bot_listener()
