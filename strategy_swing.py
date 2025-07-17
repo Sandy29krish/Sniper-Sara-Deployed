@@ -1,78 +1,59 @@
-# strategy_swing.py
+strategy_swing.py
 
-import datetime
-from utils.nse_data import get_option_chain, get_index_future_price
-from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
-from utils.learning_engine import log_learning
-from utils.trade_logger import log_trade
-from utils.telegram_bot import send_telegram_message
-from utils.indicator_utils import check_all_swing_conditions
+import datetime from utils.indicators import calculate_indicators from utils.helpers import check_entry_conditions, check_exit_conditions from utils.lot_manager import calculate_lot_size from utils.nse_data import get_future_price, get_option_chain, get_next_swing_expiry from trade_logger import log_trade
 
-CAPITAL = 220000
-INDEX_LIST = ["BANKNIFTY", "NIFTY", "SENSEX"]
-LOT_SIZE = {"BANKNIFTY": 35, "NIFTY": 75, "SENSEX": 10}
+def run_swing_strategy(index_symbol, capital): print(f"[Swing Strategy] Running swing strategy for {index_symbol}")
 
-def run_swing_strategy():
-    now = datetime.datetime.now()
-    if now.hour < 9 or now.hour > 15:
+try:
+    # Get current future price
+    future_price = get_future_price(index_symbol)
+    if not future_price:
+        print("[Swing Strategy] Unable to fetch future price.")
         return
 
-    for index in INDEX_LIST:
-        try:
-            print(f"[Swing] Checking swing setup for {index}")
+    # Get historical data and calculate indicators (10min & 15min TF handled internally)
+    signal_data = calculate_indicators(index_symbol, timeframe='15m', lookback=100)
 
-            future_price = get_index_future_price(index)
-            if not future_price:
-                send_telegram_message(f"⚠️ [Swing] No future price for {index}")
-                continue
+    if not signal_data or len(signal_data) < 2:
+        print("[Swing Strategy] Not enough data for signal check.")
+        return
 
-            # Check 10-min chart for build-up, confirm on 15-min
-            signal_data = check_all_swing_conditions(index)
+    latest = signal_data[-1]
+    previous = signal_data[-2]
 
-            if not signal_data or not signal_data.get("strong_signal"):
-                print(f"[Swing] No strong signal for {index}")
-                continue
+    # Check entry conditions (strong signal + candle closed above MAs + OI/volume/momentum confirmation)
+    if check_entry_conditions(latest, previous, strategy='swing'):
+        direction = "CE" if latest['trend'] == 'bullish' else "PE"
+        expiry = get_next_swing_expiry(index_symbol)
 
-            if not signal_data.get("closed_above_all_mas"):
-                print(f"[Swing] Waiting for candle close above MAs on 15-min")
-                continue
+        option_chain = get_option_chain(index_symbol, expiry)
+        if not option_chain:
+            print("[Swing Strategy] Option chain unavailable.")
+            return
 
-            direction = signal_data.get("direction")  # "CE" or "PE"
-            expiry_date = signal_data.get("expiry")  # Next week/month expiry
+        from utils.lot_manager import filter_otm_option_chain
+        selected_option = filter_otm_option_chain(option_chain, future_price, direction)
 
-            option_chain = get_option_chain(index)
-            otm_option = filter_otm_option_chain(option_chain, future_price, direction, max_price=60)
+        if not selected_option:
+            print("[Swing Strategy] No suitable OTM option found.")
+            return
 
-            if not otm_option:
-                send_telegram_message(f"⚠️ [Swing] No valid OTM option for {index}")
-                continue
+        strike = selected_option['strike']
+        premium = selected_option['last_price']
+        lots, capital_used = calculate_lot_size(capital, premium, index_symbol)
 
-            premium = otm_option["last_price"]
-            strike = otm_option["strike"]
+        if lots == 0:
+            print("[Swing Strategy] Insufficient capital for trade.")
+            return
 
-            lots, capital_used = calculate_lot_size(CAPITAL, premium, index)
-            if lots == 0:
-                send_telegram_message(f"❌ [Swing] Insufficient capital for {index}")
-                continue
+        log_trade("ENTRY", index_symbol, direction, strike, premium, capital_used, "LIVE", reason="Swing Signal Confirmed")
+        print(f"[Swing Strategy] Placing order: {lots} lots of {index_symbol} {strike}{direction} at {premium}")
 
-            entry = {
-                "symbol": index,
-                "direction": direction,
-                "strike": strike,
-                "premium": premium,
-                "expiry": expiry_date,
-                "lots": lots,
-                "capital_used": capital_used,
-                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "strategy": "SWING"
-            }
+        # Simulate or execute order here using broker API
 
-            send_telegram_message(
-                f"✅ [SWING ENTRY]\n{index} {direction} {strike} @ ₹{premium}\nLots: {lots} | Expiry: {expiry_date}"
-            )
-            log_trade(entry)
-            log_learning(entry, result="PENDING")
+    else:
+        print("[Swing Strategy] Entry conditions not met.")
 
-        except Exception as e:
-            print(f"[Swing] Error in strategy: {e}")
-            send_telegram_message(f"🚨 [Swing] Error in {index} - {e}")
+except Exception as e:
+    print(f"[Swing Strategy] Error: {e}")
+
