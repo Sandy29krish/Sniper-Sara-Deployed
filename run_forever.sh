@@ -1,10 +1,6 @@
 #!/bin/bash
-# This script keeps restarting the Sniper bot every 10 seconds if it stops
-
-while true
-do
-  echo "[SNIPER BOT] Running..."
-  python3 runner.py
-  echo "[SNIPER BOT] Crashed or stopped. Restarting in 10 seconds..."
-  sleep 10
+while true; do
+  python runner.py
+  echo "Sniper bot crashed with exit code $?. Restarting..." >&2
+  sleep 5
 done
