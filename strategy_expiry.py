@@ -100,3 +100,21 @@ def get_option_price(symbol, strike, direction):
 def is_reversal_detected(symbol, direction):
     # Placeholder for reversal logic based on 2-candle close below
     return False
+strategy_expiry.py
+
+from trade_logger import log_trade
+
+=== Sniper Expiry Strategy Core Logic ===
+
+def run_expiry_strategy(...): # your existing strategy logic
+
+if signal_confirmed:
+    log_trade("ENTRY", "BANKNIFTY", "CE", 48700, 175, 85.5, "LIVE", reason="Confirmed signal")
+    # execute trade...
+
+if exit_condition_met:
+    log_trade("EXIT", "BANKNIFTY", "CE", 48700, 175, 152.7, "LIVE", reason="Target Hit")
+    # execute exit...
+
+The rest of your expiry strategy code here
+
