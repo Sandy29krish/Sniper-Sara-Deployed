@@ -1,21 +1,8 @@
 lot_manager.py
 
-LOT_SIZE_MAPPING = { "BANKNIFTY": 35, "NIFTY": 75, "SENSEX": 10 }
+INSTRUMENT_LOT_SIZES = { "BANKNIFTY": 35, "NIFTY": 75, "SENSEX": 10 }
 
-def calculate_lot_size(capital, premium, symbol): """ Calculates number of lots that can be bought based on available capital, premium, and symbol's lot size.
-
-Returns:
-    (lots, capital_used)
-"""
-try:
-    lot_multiplier = LOT_SIZE_MAPPING.get(symbol.upper(), 35)  # default fallback to BANKNIFTY
-    lot_cost = premium * lot_multiplier
-    lots = int(capital // lot_cost)
-    used_capital = lots * lot_cost
-    return lots, used_capital
-except Exception as e:
-    print(f"[Lot Manager] Error calculating lot size: {e}")
-    return 0, 0
+def calculate_lot_size(capital, premium, instrument="BANKNIFTY"): """ Calculates number of lots that can be bought based on available capital and premium. Returns: (lots, capital_used) """ try: lot_size = INSTRUMENT_LOT_SIZES.get(instrument.upper(), 1) lot_cost = premium * lot_size lots = int(capital // lot_cost) used_capital = lots * lot_cost return lots, used_capital except Exception as e: print(f"[Lot Manager] Error calculating lot size: {e}") return 0, 0
 
 def filter_otm_option_chain(option_chain, spot_price, direction, max_price=60): """ Filter OTM strike closest to spot price with premium < max_price and 100-point strike gap for expiry logic """ try: otm_options = [] for option in option_chain: strike = option.get("strike") last_price = option.get("last_price") if not strike or not last_price: continue
 
@@ -33,3 +20,4 @@ if direction == "CE" and strike > spot_price and last_price <= max_price and (st
 except Exception as e:
     print(f"[Lot Manager] Error filtering OTM option chain: {e}")
     return None
+
