@@ -1,86 +1,78 @@
 # strategy_swing.py
 
+import datetime
+from utils.nse_data import get_option_chain, get_index_future_price
+from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
+from utils.learning_engine import log_learning
+from utils.trade_logger import log_trade
+from utils.telegram_bot import send_telegram_message
+from utils.indicator_utils import check_all_swing_conditions
+
+CAPITAL = 220000
+INDEX_LIST = ["BANKNIFTY", "NIFTY", "SENSEX"]
+LOT_SIZE = {"BANKNIFTY": 35, "NIFTY": 75, "SENSEX": 10}
+
 def run_swing_strategy():
-    print("📊 Swing strategy executed (placeholder).")
-    # TODO: Add your swing trade logic here
-# strategy_swing.py
-
-from nse_data import get_expiry_dates, get_spot_price, get_option_chain_data
-from lot_manager import calculate_lot_size, filter_otm_option_chain
-from telegram_bot import TelegramBot
-from learning_engine import log_trade_learning
-from datetime import datetime
-import time
-
-def run_swing_strategy():
-    telegram = TelegramBot()
-    telegram.send_message("📈 Sniper Swing Strategy Started")
-
-    symbol = "NIFTY"
-    capital = 220000
-    lot_size = 25
-    max_premium = 80  # slightly flexible for swing
-    today = datetime.now()
-    
-    # Step 1: Get expiry dates and pick NEXT WEEK
-    expiry_list = get_expiry_dates(symbol)
-    if not expiry_list or len(expiry_list) < 2:
-        telegram.send_message("❌ Not enough expiries available.")
+    now = datetime.datetime.now()
+    if now.hour < 9 or now.hour > 15:
         return
 
-    # Use 2nd expiry (next weekly), fallback to last monthly if end of month
-    expiry = expiry_list[1]
-    if today.day > 23:  # simple monthly expiry check
-        expiry = expiry_list[-1]
+    for index in INDEX_LIST:
+        try:
+            print(f"[Swing] Checking swing setup for {index}")
 
-    spot_price = get_spot_price(symbol)
-    if not spot_price:
-        telegram.send_message("❌ Spot price fetch failed.")
-        return
+            future_price = get_index_future_price(index)
+            if not future_price:
+                send_telegram_message(f"⚠️ [Swing] No future price for {index}")
+                continue
 
-    option_chain = get_option_chain_data(symbol, expiry)
-    if not option_chain:
-        telegram.send_message("❌ Option chain unavailable.")
-        return
+            # Check 10-min chart for build-up, confirm on 15-min
+            signal_data = check_all_swing_conditions(index)
 
-    # Placeholder: Direction = CE, simulate logic until full indicator check is added
-    direction = "CE"
-    otm_option = filter_otm_option_chain(option_chain, spot_price, direction, max_price=max_premium)
-    if not otm_option:
-        telegram.send_message("❌ No suitable OTM found.")
-        return
+            if not signal_data or not signal_data.get("strong_signal"):
+                print(f"[Swing] No strong signal for {index}")
+                continue
 
-    premium = otm_option["last_price"]
-    strike = otm_option["strike"]
-    lots, used_capital = calculate_lot_size(capital, premium, lot_size)
+            if not signal_data.get("closed_above_all_mas"):
+                print(f"[Swing] Waiting for candle close above MAs on 15-min")
+                continue
 
-    if lots == 0:
-        telegram.send_message("❌ Capital insufficient for swing trade.")
-        return
+            direction = signal_data.get("direction")  # "CE" or "PE"
+            expiry_date = signal_data.get("expiry")  # Next week/month expiry
 
-    entry_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    telegram.send_message(
-        f"✅ Swing Entry\nSymbol: {symbol}\nStrike: {strike} {direction}\nPremium: {premium}\nLots: {lots}\nUsed Capital: ₹{used_capital}\nTime: {entry_time}"
-    )
+            option_chain = get_option_chain(index)
+            otm_option = filter_otm_option_chain(option_chain, future_price, direction, max_price=60)
 
-    # Simulate swing holding time
-    time.sleep(2)
+            if not otm_option:
+                send_telegram_message(f"⚠️ [Swing] No valid OTM option for {index}")
+                continue
 
-    exit_price = round(premium * 1.85, 2)
-    exit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    telegram.send_message(
-        f"💸 Swing Exit\nStrike: {strike} {direction}\nExit Price: {exit_price}\nExit Time: {exit_time}"
-    )
+            premium = otm_option["last_price"]
+            strike = otm_option["strike"]
 
-    log_trade_learning({
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "strategy": "swing",
-        "signal_strength": "strong",
-        "entry_reason": "MA cross + RSI + Volume",
-        "exit_reason": "Target Hit",
-        "pnl_percent": 85,
-        "fake_breakout": False,
-        "theta_decay_impact": "medium"
-    })
+            lots, capital_used = calculate_lot_size(CAPITAL, premium, index)
+            if lots == 0:
+                send_telegram_message(f"❌ [Swing] Insufficient capital for {index}")
+                continue
 
-    telegram.send_message("📘 Swing trade logged for learning.")
+            entry = {
+                "symbol": index,
+                "direction": direction,
+                "strike": strike,
+                "premium": premium,
+                "expiry": expiry_date,
+                "lots": lots,
+                "capital_used": capital_used,
+                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+                "strategy": "SWING"
+            }
+
+            send_telegram_message(
+                f"✅ [SWING ENTRY]\n{index} {direction} {strike} @ ₹{premium}\nLots: {lots} | Expiry: {expiry_date}"
+            )
+            log_trade(entry)
+            log_learning(entry, result="PENDING")
+
+        except Exception as e:
+            print(f"[Swing] Error in strategy: {e}")
+            send_telegram_message(f"🚨 [Swing] Error in {index} - {e}")
