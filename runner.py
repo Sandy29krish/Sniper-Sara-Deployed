@@ -10,16 +10,17 @@ if __name__ == "__main__":
         print("🟢 Sniper bot is starting...")
 
         # Start Telegram command listener
-        telegram_bot = TelegramBot()
-        telegram_bot.start_command_listener()
+        start_bot_listener()
 
         # Continuous loop to keep both strategies alive
         while True:
-            run_expiry_strategy()
-            run_swing_strategy()
+            if is_bot_active():
+                mode = get_bot_mode()
+                if mode == "LIVE":
+                    run_expiry_strategy()
+                    run_swing_strategy()
             time.sleep(60)  # Adjust frequency as needed
 
     except Exception as e:
         print("❌ Fatal error:")
         traceback.print_exc()
-
