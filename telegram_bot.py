@@ -29,9 +29,13 @@ def stop_command(message):
     STATUS["mode"] = "STOPPED" 
     send_telegram_message("🛑 Sniper bot stopped by user.")
 
-@bot.message_handler(commands=["status"]) 
-def status_command(message): status_msg = f"🤖 Bot Status: {'✅ ACTIVE' if STATUS['active'] else '⛔ STOPPED'}\nMode: {STATUS['mode']}" send_telegram_message(status_msg)
-
+@bot.message_handler(commands=["status"])
+def status_command(message):
+    status_msg = (
+        f"🤖 Bot Status: {'✅ ACTIVE' if STATUS['active'] else '⛔ STOPPED'}\n"
+        f"Mode: {STATUS['mode']}"
+    )
+    send_telegram_message(status_msg)
 @bot.message_handler(commands=["pnl"])
 def pnl_command(message):
     try:
