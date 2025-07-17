@@ -20,7 +20,7 @@ def run_expiry_strategy():
     telegram.send_message("🚀 Sniper Expiry Strategy Started")
 
     symbol = "BANKNIFTY"
-    capital = 230000
+    capital = 220000
     lot_size = 15
     max_premium = 60
 
