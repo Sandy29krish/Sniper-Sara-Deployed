@@ -1,54 +1,46 @@
 # lot_manager.py
 
-import math
-
-def calculate_lot_size(capital: float, option_price: float, lot_size: int = 25, max_allocation_percent: float = 0.25):
+def calculate_lot_size(capital, premium, lot_multiplier=15):
     """
-    Calculate dynamic lot size based on available capital and option premium.
-
-    Parameters:
-    - capital: total available capital
-    - option_price: price of one option (premium)
-    - lot_size: number of options per lot (25 for NIFTY, 15 for BANKNIFTY)
-    - max_allocation_percent: maximum % of capital to risk per trade (default: 25%)
+    Calculates number of lots that can be bought based on available capital and premium.
+    Assumes 1 lot = 15 quantity for BANKNIFTY, NIFTY, or SENSEX
 
     Returns:
-    - number of lots (int)
-    - total capital used (float)
+        (lots, capital_used)
     """
-    max_capital_to_use = capital * max_allocation_percent
-    cost_per_lot = option_price * lot_size
+    try:
+        lot_cost = premium * lot_multiplier
+        lots = int(capital // lot_cost)
+        used_capital = lots * lot_cost
+        return lots, used_capital
+    except Exception as e:
+        print(f"[Lot Manager] Error calculating lot size: {e}")
+        return 0, 0
 
-    if cost_per_lot == 0:
-        return 0, 0.0
-
-    lots = math.floor(max_capital_to_use / cost_per_lot)
-    total_cost = lots * cost_per_lot
-    return lots, total_cost
-
-
-def filter_otm_option_chain(option_chain: list, spot_price: float, direction: str, max_price: float = 60):
+def filter_otm_option_chain(option_chain, spot_price, direction, max_price=60):
     """
-    Filter the next OTM strike option based on direction and price cap.
-
-    Parameters:
-    - option_chain: list of options with 'strike' and 'last_price'
-    - spot_price: current index spot price
-    - direction: 'CE' or 'PE'
-    - max_price: max premium for option entry (e.g. 60)
-
-    Returns:
-    - selected option dict or None
+    Filter OTM strike closest to spot price with premium < max_price
+    and 100-point strike gap for expiry logic
     """
-    sorted_chain = sorted(option_chain, key=lambda x: x['strike'])
-    
-    if direction == 'CE':
-        otm_options = [opt for opt in sorted_chain if opt['strike'] > spot_price and opt['type'] == 'CE']
-    else:
-        otm_options = [opt for opt in reversed(sorted_chain) if opt['strike'] < spot_price and opt['type'] == 'PE']
+    try:
+        otm_options = []
+        for option in option_chain:
+            strike = option.get("strike")
+            last_price = option.get("last_price")
+            if not strike or not last_price:
+                continue
 
-    for opt in otm_options:
-        if opt['last_price'] <= max_price:
-            return opt
+            if direction == "CE" and strike > spot_price and last_price <= max_price and (strike - spot_price) % 100 == 0:
+                otm_options.append(option)
+            elif direction == "PE" and strike < spot_price and last_price <= max_price and (spot_price - strike) % 100 == 0:
+                otm_options.append(option)
 
-    return None  # No suitable OTM option found
+        if not otm_options:
+            return None
+
+        sorted_options = sorted(otm_options, key=lambda x: abs(x["strike"] - spot_price))
+        return sorted_options[0] if sorted_options else None
+
+    except Exception as e:
+        print(f"[Lot Manager] Error filtering OTM option chain: {e}")
+        return None
