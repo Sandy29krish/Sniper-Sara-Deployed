@@ -1,7 +1,11 @@
 import os
 
-# Strategy configuration
-CAPITAL = float(os.getenv("CAPITAL", 250000))           # Example default capital
-MAX_PREMIUM = float(os.getenv("MAX_PREMIUM", 150))      # Max premium for OTM option
-STRATEGY_MODE = os.getenv("STRATEGY_MODE", "LIVE")      # LIVE or BACKTEST
-SYMBOLS = os.getenv("SYMBOLS", "BANKNIFTY,NIFTY").split(",")  # Comma-separated symbols
+# Capital and risk config
+CAPITAL = float(os.getenv("CAPITAL", 250000))
+MAX_PREMIUM = float(os.getenv("MAX_PREMIUM", 150))
+
+# LIVE or BACKTEST mode
+STRATEGY_MODE = os.getenv("STRATEGY_MODE", "LIVE")
+
+# Supported symbols: Comma-separated string in Render env like: BANKNIFTY,SENSEX,NIFTY
+SYMBOLS = os.getenv("SYMBOLS", "BANKNIFTY,NIFTY,SENSEX").split(",")
