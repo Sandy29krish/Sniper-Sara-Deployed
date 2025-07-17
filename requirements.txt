@@ -3,4 +3,3 @@ requests
 python-telegram-bot
 kiteconnect
 pyotp
-pyTelegramBotAPI==4.14.1
