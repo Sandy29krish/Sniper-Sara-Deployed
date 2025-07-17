@@ -1,7 +1,7 @@
 # Main runner for Sniper bot
 import traceback
 import time
-from telegram_bot import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
+from telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
 from strategy_expiry import run_expiry_strategy
 from strategy_swing import run_swing_strategy
 
