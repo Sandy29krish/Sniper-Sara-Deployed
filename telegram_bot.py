@@ -11,8 +11,11 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 STATUS = {"active": False, "mode": "IDLE"}  # Global bot control
 
-def send_telegram_message(message): try: bot.send_message(CHAT_ID, message) except Exception as e: print(f"[Telegram] Failed to send message: {e}")
-
+def send_telegram_message(message):
+    try:
+        bot.send_message(CHAT_ID, message)
+    except Exception as e:
+        print(f"[Telegram Error] {e}")
 ========================= Command Handlers =============================
 
 @bot.message_handler(commands=["start_sniper"]) def start_command(message): STATUS["active"] = True STATUS["mode"] = "LIVE" send_telegram_message("✅ Sniper bot started. Monitoring live market conditions...")
