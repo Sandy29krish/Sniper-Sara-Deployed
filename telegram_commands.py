@@ -1,7 +1,6 @@
-telegram_commands.py
-
 import telebot
 import os
+import json  # ✅ You missed this line
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") 
@@ -16,6 +15,7 @@ def send_telegram_message(message):
         bot.send_message(CHAT_ID, message)
     except Exception as e:
         print(f"[Telegram Error] {e}")
+
 # ======================== Command Handlers ========================
 @bot.message_handler(commands=["start_sniper"]) 
 def start_command(message): 
@@ -36,6 +36,7 @@ def status_command(message):
         f"Mode: {STATUS['mode']}"
     )
     send_telegram_message(status_msg)
+
 @bot.message_handler(commands=["pnl"])
 def pnl_command(message):
     try:
@@ -44,6 +45,7 @@ def pnl_command(message):
             send_telegram_message(f"📊 Trades:\n{json.dumps(data, indent=2)}")
     except:
         send_telegram_message("⚠️ No trade log found or error reading the file.")
+
 def start_bot_listener():
     print("[Telegram] Bot listener started.")
     bot.polling(none_stop=True)
@@ -53,6 +55,6 @@ def is_bot_active():
 
 def get_bot_mode():
     return STATUS["mode"]
-    # Optional: to auto-start in dev environment
+
 if __name__ == "__main__":
     start_bot_listener()
