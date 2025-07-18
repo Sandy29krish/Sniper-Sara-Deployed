@@ -1,30 +1,52 @@
 # utils/lot_manager.py
 
-from config import CAPITAL, MAX_PREMIUM, LOT_SIZE
+def calculate_lot_size(symbol, capital, premium):
+    """
+    Calculate number of lots based on capital and per-lot premium.
+    Follows minimum lot sizing as:
+    - BANKNIFTY: 30
+    - NIFTY: 75
+    - SENSEX: 10
+    """
 
-def calculate_lot_size(symbol):
-    lot_size = LOT_SIZE.get(symbol, 0)
-    if not lot_size:
-        raise ValueError(f"Unknown symbol: {symbol}")
-    capital_per_lot = 10000
-    total_lots = CAPITAL // (capital_per_lot * lot_size)
-    return total_lots if total_lots > 0 else 1
+    lot_sizes = {
+        "BANKNIFTY": 30,
+        "NIFTY": 75,
+        "SENSEX": 10
+    }
 
-def filter_otm_option_chain(option_chain, future_price, direction):
-    strike_gap = 100
-    target_strike = None
-    available_strikes = sorted([entry["strikePrice"] for entry in option_chain])
+    lot_size = lot_sizes.get(symbol.upper(), 25)  # Default fallback 25
+    total_cost_per_lot = lot_size * premium
 
-    if direction == "CE":
-        target_strike = next((strike for strike in available_strikes if strike > future_price), None)
-    elif direction == "PE":
-        target_strike = next((strike for strike in reversed(available_strikes) if strike < future_price), None)
+    if total_cost_per_lot == 0:
+        return 0
 
-    if not target_strike:
-        print("[Lot Manager] No suitable strike found.")
-        return None
+    max_lots = int(capital // total_cost_per_lot)
+    return max(lot_size, max_lots * lot_size)
 
-    for entry in option_chain:
-        if entry["strikePrice"] == target_strike:
-            return entry
+
+def filter_otm_option_chain(option_chain, future_price, direction, max_premium):
+    """
+    Filters OTM options based on direction and premium constraints.
+    Picks the next OTM option (100-point gap) with premium ≤ max_premium.
+    """
+
+    try:
+        strike_gap = 100  # Can be made dynamic if needed
+
+        if direction == "CE":
+            otm_strike = ((future_price // strike_gap) + 1) * strike_gap
+        elif direction == "PE":
+            otm_strike = ((future_price // strike_gap) - 1) * strike_gap
+        else:
+            return None
+
+        for option in option_chain:
+            if option["strikePrice"] == otm_strike and option["type"] == direction:
+                if option["lastPrice"] <= max_premium:
+                    return option
+
+    except Exception as e:
+        print(f"[Lot Manager] Error filtering option: {e}")
+
     return None
