@@ -1,4 +1,4 @@
-# utils/ai_assistant.py
+# ai_assistant.py
 
 def explain_trade(symbol, direction, indicators):
     parts = []
