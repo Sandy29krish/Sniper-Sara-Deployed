@@ -4,7 +4,7 @@ from utils.lot_manager import calculate_lot_size, get_next_week_expiry_strike
 from utils.nse_data import get_future_price, get_expiry_date 
 from utils.learning_engine import learn_from_trade 
 from utils.telegram_bot import send_telegram_message 
-from utils.trade_log import log_trade 
+from utils.trade_logger import log_trade 
 from config import CAPITAL, SYMBOLS, STRATEGY_MODE
 
 def run_swing_strategy(): print("[Swing Strategy] Initializing...") for symbol in SYMBOLS: try: future_price = get_future_price(symbol) expiry_date = get_expiry_date(symbol, swing=True)  # next week's expiry print(f"[{symbol}] Swing Mode | Expiry: {expiry_date} | Futures: {future_price}")
