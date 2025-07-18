@@ -31,3 +31,18 @@ if __name__ == "__main__":
         print(f"[Runner] Telegram alert failed: {e}")
 
     main_loop()
+from utils.ai_assistant import explain_trade
+from utils.telegram_commands import send_telegram_message
+
+# Send startup message
+send_telegram_message("🤖 Sniper Bot Runner has started.")
+
+# Add an AI explanation for context
+reason = explain_trade("BANKNIFTY", "CE", {
+    "above_200wma": True,
+    "rsi_strong": True,
+    "volume_spike": True,
+    "slope_strong": True,
+    "strength": 4
+})
+send_telegram_message(f"🧠 AI Trade Setup Context:\n{reason}")
