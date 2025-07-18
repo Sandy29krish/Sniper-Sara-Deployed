@@ -1,11 +1,18 @@
 #!/bin/bash
 
-echo "Starting Sniper expiry strategy bot..."
-
 while true
 do
-  echo "Launching runner.py at $(date)"
+  echo "🔁 Refreshing token and starting Sniper Bot..."
+
+  # Refresh Zerodha access token
+  python3 utils/auto_token_refresh.py
+
+  # Export token to environment
+  export KITE_ACCESS_TOKEN=$(cat access_token.txt)
+
+  # Run main bot
   python3 runner.py
-  echo "Restarting in 10 seconds after crash..."
-  sleep 10
+
+  echo "❌ Bot exited unexpectedly. Restarting in 60 seconds..."
+  sleep 60
 done
