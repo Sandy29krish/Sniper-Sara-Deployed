@@ -1,9 +1,9 @@
 # runner.py
 
 import time
-from strategy_expiry import run_expiry_strategy
-from telegram_commands import start_bot_listener, is_bot_active, get_bot_mode
 import threading
+from strategy_expiry import run_expiry_strategy
+from telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
 
 def main_loop():
     print("[Runner] Sniper strategy monitor started.")
@@ -22,8 +22,12 @@ def main_loop():
 
 if __name__ == "__main__":
     # Start Telegram bot listener in background
-    threading.Thread(target=start_bot_listener).start()
+    threading.Thread(target=start_bot_listener, daemon=True).start()
     time.sleep(5)  # small delay to stabilize listener
+
+    try:
+        send_telegram_message("✅ Sniper Runner is LIVE and ready.")
+    except Exception as e:
+        print(f"[Runner] Telegram alert failed: {e}")
+
     main_loop()
-from telegram_commands import send_telegram_message
-send_telegram_message("✅ Sniper Runner is LIVE and ready.")
