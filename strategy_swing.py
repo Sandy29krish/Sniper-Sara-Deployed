@@ -5,7 +5,7 @@ from utils.nse_data import fetch_nse_option_chain, get_future_price, get_next_sw
 from utils.learning_engine import learn_from_trade
 from utils.telegram_commands import send_telegram_message
 from utils.trade_logger import log_trade
-from utlis.ai_assistant import explain_trade, should_enter_trade
+from utils.ai_assistant import explain_trade, should_enter_trade
 from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
 def run_swing_strategy():
@@ -17,7 +17,7 @@ def run_swing_strategy():
             future_price = get_future_price(symbol)
             print(f"[{symbol}] Swing Expiry: {expiry_date}, Futures: {future_price}")
 
-            # Use 15-min timeframe for confirmed swing signal
+            # Use 15-minute candle for confirmed swing entries
             direction, signal_strength = calculate_indicators(symbol, timeframe="15minute", mode="swing")
             if not direction or signal_strength < 4:
                 print(f"[{symbol}] No strong swing setup. Skipping.")
@@ -35,7 +35,9 @@ def run_swing_strategy():
                 continue
 
             option_chain = fetch_nse_option_chain(symbol)
-            selected_option = filter_otm_option_chain(option_chain, future_price, direction, MAX_PREMIUM, expiry_date)
+            selected_option = filter_otm_option_chain(
+                option_chain, future_price, direction, MAX_PREMIUM, expiry_date
+            )
 
             if not selected_option:
                 print(f"[{symbol}] No valid OTM option found for swing.")
@@ -75,7 +77,7 @@ def monitor_swing_trade(symbol, direction, strike, entry_price, lots):
 
     while True:
         try:
-            time.sleep(900)  # check every 15 minutes
+            time.sleep(900)  # 15 minutes
             current_price = get_option_price(symbol, strike, direction)
             elapsed_minutes = (time.time() - entry_time) / 60
 
@@ -87,7 +89,7 @@ def monitor_swing_trade(symbol, direction, strike, entry_price, lots):
                 full_exit = True
                 reason = "Swing Target Hit (200%)"
 
-            elif elapsed_minutes >= 1440:  # 24 hours
+            elif elapsed_minutes >= 1440:
                 full_exit = True
                 reason = "Swing Time Exit (24hr)"
 
@@ -104,5 +106,5 @@ def monitor_swing_trade(symbol, direction, strike, entry_price, lots):
 
 
 def get_option_price(symbol, strike, direction):
-    # TODO: Replace with live API logic
+    # TODO: Replace with live API logic to fetch actual premium
     return 60.0
