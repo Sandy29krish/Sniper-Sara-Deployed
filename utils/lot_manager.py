@@ -1,52 +1,16 @@
-# utils/lot_manager.py
+from config import CAPITAL, MAX_PREMIUM, SYMBOLS
+
+SYMBOL_LOT_SIZE = {"BANKNIFTY": 30, "NIFTY": 75, "SENSEX": 10}
 
 def calculate_lot_size(symbol, capital, premium):
-    """
-    Calculate number of lots based on capital and per-lot premium.
-    Follows minimum lot sizing as:
-    - BANKNIFTY: 30
-    - NIFTY: 75
-    - SENSEX: 10
-    """
+    lot_size = SYMBOL_LOT_SIZE.get(symbol.upper(), 1)
+    # Example: invest up to 1% of capital per trade
+    budget = capital * 0.01
+    quantity = int(budget / premium)
+    return max(1, quantity // lot_size) * lot_size
 
-    lot_sizes = {
-        "BANKNIFTY": 30,
-        "NIFTY": 75,
-        "SENSEX": 10
-    }
-
-    lot_size = lot_sizes.get(symbol.upper(), 25)  # Default fallback 25
-    total_cost_per_lot = lot_size * premium
-
-    if total_cost_per_lot == 0:
-        return 0
-
-    max_lots = int(capital // total_cost_per_lot)
-    return max(lot_size, max_lots * lot_size)
-
-
-def filter_otm_option_chain(option_chain, future_price, direction, max_premium):
-    """
-    Filters OTM options based on direction and premium constraints.
-    Picks the next OTM option (100-point gap) with premium ≤ max_premium.
-    """
-
-    try:
-        strike_gap = 100  # Can be made dynamic if needed
-
-        if direction == "CE":
-            otm_strike = ((future_price // strike_gap) + 1) * strike_gap
-        elif direction == "PE":
-            otm_strike = ((future_price // strike_gap) - 1) * strike_gap
-        else:
-            return None
-
-        for option in option_chain:
-            if option["strikePrice"] == otm_strike and option["type"] == direction:
-                if option["lastPrice"] <= max_premium:
-                    return option
-
-    except Exception as e:
-        print(f"[Lot Manager] Error filtering option: {e}")
-
-    return None
+def filter_otm_option_chain(chain, future_price, direction, max_premium):
+    # Placeholder: filter for strikes near future_price and LTP < max_premium
+    # Return selected option dict or None
+    return next((opt for opt in chain 
+                 if abs(opt["strikePrice"] - future_price) < 500 and opt["lastPrice"] <= max_premium), None)
