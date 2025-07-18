@@ -1,33 +1,27 @@
-import json
-import os
+# utils/learning_engine.py
+
 from datetime import datetime
 
-LEARNING_LOG = "learning_log.json"
-
+# Learn from trade outcome and log internally
 def learn_from_trade(symbol, direction, entry_price, exit_price, reason, strategy="expiry"):
-    result = "WIN" if exit_price > entry_price else "LOSS"
-    delta = round(exit_price - entry_price, 2)
-    percentage_change = round((exit_price - entry_price) / entry_price * 100, 2)
+    pnl = exit_price - entry_price if direction == "CE" else entry_price - exit_price
+    result = "PROFIT" if pnl > 0 else "LOSS"
+    
+    print(f"[Learn] {symbol} | {strategy.upper()} | {result} | Entry: {entry_price}, Exit: {exit_price}, Reason: {reason}")
+    # Placeholder: Save to ML model or pattern store in future
+    return result
 
-    record = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "strategy": strategy,
-        "symbol": symbol,
-        "direction": direction,
-        "entry_price": entry_price,
-        "exit_price": exit_price,
-        "result": result,
-        "return_%": percentage_change,
-        "reason": reason,
-        "delta": delta
-    }
+# Generate AI-style explanation for trade outcome (for stop-loss or mistake)
+def learn_from_mistake(symbol, context, result="LOSS"):
+    entry = context.get("entry_price")
+    exit_ = context.get("exit_price")
+    reason = context.get("reason")
+    duration = context.get("duration", 0)
 
-    if not os.path.exists(LEARNING_LOG):
-        with open(LEARNING_LOG, "w") as f:
-            json.dump([record], f, indent=2)
-    else:
-        with open(LEARNING_LOG, "r+") as f:
-            data = json.load(f)
-            data.append(record)
-            f.seek(0)
-            json.dump(data, f, indent=2)
+    insight = (
+        f"Trade on {symbol} failed due to '{reason}'. Entry was {entry}, exit was {exit_}. "
+        f"Held for {round(duration, 1)} minutes. Consider reevaluating signal strength, entry timing, or market volatility."
+    )
+
+    print(f"[AI Insight] {insight}")
+    return insight
