@@ -1,4 +1,5 @@
 #!/bin/bash
+export PYTHONPATH=$(pwd)
 while true
 do
   echo "🔁 Restarting Sniper bot..."
