@@ -1,7 +1,6 @@
 import pandas as pd 
 import numpy as np 
-from datetime 
-import datetime, timedelta 
+from datetime import datetime, timedelta 
 from utils.kite_instance 
 import kite  # make sure this is initialized globally
 
