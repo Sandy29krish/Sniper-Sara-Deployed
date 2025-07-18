@@ -1,0 +1,19 @@
+# test_ai.py
+from utils.ai_assistant import explain_trade, should_enter_trade
+
+sample_conditions = {
+    "symbol": "BANKNIFTY",
+    "direction": "CE",
+    "signal_strength": 4
+}
+
+indicators = {
+    "above_200wma": True,
+    "rsi_strong": True,
+    "volume_spike": True,
+    "slope_strong": True,
+    "strength": 4
+}
+
+print("🧠 Reason:", explain_trade("BANKNIFTY", "CE", indicators))
+print("✅ AI Decision:", should_enter_trade(sample_conditions))
