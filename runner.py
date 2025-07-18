@@ -25,3 +25,5 @@ if __name__ == "__main__":
     threading.Thread(target=start_bot_listener).start()
     time.sleep(5)  # small delay to stabilize listener
     main_loop()
+from telegram_commands import send_telegram_message
+send_telegram_message("✅ Sniper Runner is LIVE and ready.")
