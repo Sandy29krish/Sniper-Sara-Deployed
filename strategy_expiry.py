@@ -5,7 +5,7 @@ from utils.nse_data import fetch_nse_option_chain, get_future_price, get_expiry_
 from utils.learning_engine import learn_from_trade
 from utils.telegram_commands import send_telegram_message
 from utils.trade_logger import log_trade
-from utils.ai_assistant import explain_trade, learn_from_mistake, should_enter_trade
+from ai_assistant import explain_trade, learn_from_mistake, should_enter_trade
 from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
 
