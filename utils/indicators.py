@@ -1,67 +1,91 @@
-import yfinance as yf
-import pandas as pd
-import numpy as np
+import pandas as pd import numpy as np from datetime import datetime, timedelta from utils.kite_instance import kite  # make sure this is initialized globally
 
-def calculate_indicators(symbol, timeframe="1minute", mode="expiry"):
-    interval = "1m" if timeframe == "1minute" else "3m"
-    lookback = "1d"  # Fetch today's data
+def calculate_indicators(symbol, timeframe="1minute", mode="expiry"): interval = "minute" if timeframe == "1minute" else "3minute" duration = 1  # 1 day
 
-    yf_symbol = "^NSEBANK" if "BANKNIFTY" in symbol else "^NSEI" if "NIFTY" in symbol else "^BSESN"
-    df = yf.download(yf_symbol, interval=interval, period=lookback, progress=False)
+# Define instrument token map
+instrument_map = {
+    "BANKNIFTY": "NSE:NIFTYBANK",
+    "NIFTY": "NSE:NIFTY 50",
+    "SENSEX": "BSE:SENSEX"
+}
 
-    if df.empty or len(df) < 30:
-        return None, 0
+instrument = instrument_map.get(symbol.upper())
+if not instrument:
+    return None, 0
 
-    df["HL2"] = (df["High"] + df["Low"]) / 2
-    df["OHLC4"] = (df["Open"] + df["High"] + df["Low"] + df["Close"]) / 4
+# Get historical data
+to_date = datetime.now()
+from_date = to_date - timedelta(days=duration)
 
-    # === Moving Averages ===
-    df["MA_3"] = df["OHLC4"].rolling(3).mean()
-    df["MA_9"] = df["OHLC4"].rolling(9).mean()
-    df["MA_20"] = df["OHLC4"].rolling(20).mean()
-    df["MA_50"] = df["High"].ewm(span=50, adjust=False).mean()
-    df["MA_200_WMA"] = df["High"].rolling(200).mean()
+try:
+    candles = kite.historical_data(
+        instrument_token=kite.ltp([instrument])[instrument]['instrument_token'],
+        from_date=from_date,
+        to_date=to_date,
+        interval=interval,
+        continuous=False
+    )
+except Exception as e:
+    print(f"[Indicators] Error fetching data: {e}")
+    return None, 0
 
-    # === RSI and RSI MA ===
-    delta = df["OHLC4"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(21).mean()
-    avg_loss = loss.rolling(21).mean()
-    rs = avg_gain / avg_loss
-    df["RSI_21"] = 100 - (100 / (1 + rs))
-    df["RSI_MA_9"] = df["RSI_21"].rolling(9).mean()
-    df["RSI_MA_14"] = df["RSI_21"].rolling(14).mean()
-    df["RSI_MA_26"] = df["RSI_21"].rolling(26).mean()
+df = pd.DataFrame(candles)
+if df.empty or len(df) < 30:
+    return None, 0
 
-    # === Price Volume Strength ===
-    df["Vol_Strength"] = df["Volume"] * df["Close"]
+df["HL2"] = (df["high"] + df["low"]) / 2
+df["OHLC4"] = (df["open"] + df["high"] + df["low"] + df["close"]) / 4
 
-    # === Linear Regression Slope (Price) ===
-    def lr_slope(series):
-        x = np.arange(len(series))
-        if len(series) < 2:
-            return 0
-        A = np.vstack([x, np.ones(len(x))]).T
-        m, _ = np.linalg.lstsq(A, series, rcond=None)[0]
-        return m
+# Moving Averages
+df["MA_3"] = df["OHLC4"].rolling(3).mean()
+df["MA_9"] = df["OHLC4"].rolling(9).mean()
+df["MA_20"] = df["OHLC4"].rolling(20).mean()
+df["MA_50"] = df["high"].ewm(span=50, adjust=False).mean()
+df["MA_200_WMA"] = df["high"].rolling(window=200).mean()
 
-    df["LR_Slope"] = df["High"].rolling(21).apply(lr_slope, raw=True)
+# RSI (OHLC4)
+delta = df["OHLC4"].diff()
+gain = delta.clip(lower=0)
+loss = -1 * delta.clip(upper=0)
+avg_gain = gain.rolling(14).mean()
+avg_loss = loss.rolling(14).mean()
+rs = avg_gain / avg_loss
+df["RSI"] = 100 - (100 / (1 + rs))
 
-    latest = df.iloc[-1]
+df["RSI_MA_9"] = df["RSI"].rolling(9).mean()
+df["RSI_MA_14"] = df["RSI"].rolling(14).mean()
+df["RSI_MA_26"] = df["RSI"].rolling(26).mean()
 
-    # === 4-Step Confirmation ===
-    conditions = [
-        latest["Close"] > latest["MA_3"] > latest["MA_9"] > latest["MA_20"] > latest["MA_50"] > latest["MA_200_WMA"],
-        latest["RSI_21"] > latest["RSI_MA_9"] > latest["RSI_MA_14"] > latest["RSI_MA_26"],
-        latest["Vol_Strength"] > df["Vol_Strength"].rolling(20).mean().iloc[-1],
-        latest["LR_Slope"] > 30,
-    ]
+# Price Volume
+df["PriceVolume"] = df["close"] * df["volume"]
+df["PV_MA"] = df["PriceVolume"].rolling(9).mean()
 
-    signal_strength = sum(conditions)
+# Linear Regression Slope (last 21 candles)
+def calc_lr_slope(series):
+    x = np.arange(len(series))
+    y = series.values
+    if len(y) < 2:
+        return 0
+    slope, _ = np.polyfit(x, y, 1)
+    return slope * 100  # scaled
 
+df["LR_Slope"] = df["high"].rolling(window=21).apply(calc_lr_slope, raw=False)
+
+latest = df.iloc[-1]
+above_mas = latest["close"] > max(latest["MA_3"], latest["MA_9"], latest["MA_20"], latest["MA_50"], latest["MA_200_WMA"])
+rsi_strong = latest["RSI"] > max(latest["RSI_MA_9"], latest["RSI_MA_14"], latest["RSI_MA_26"])
+volume_spike = latest["PriceVolume"] > latest["PV_MA"] * 1.2
+slope_strong = latest["LR_Slope"] > 30
+
+# Direction Logic
+if above_mas and rsi_strong and slope_strong:
+    direction = "CE"
+elif not above_mas and rsi_strong and slope_strong:
+    direction = "PE"
+else:
     direction = None
-    if signal_strength >= 4:
-        direction = "CE" if latest["Close"] > latest["MA_3"] else "PE"
 
-    return direction, signal_strength
+signal_strength = sum([above_mas, rsi_strong, volume_spike, slope_strong])
+
+return direction, signal_strength
+
