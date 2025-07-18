@@ -1,18 +1,12 @@
-import requests
-import os
-from dotenv import load_dotenv
+# telegram_test.py
 
-load_dotenv()
+from settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+import telebot
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-message = "✅ Test message from Sniper bot!"
-
-url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-response = requests.post(url, data={"chat_id": CHAT_ID, "text": message})
-
-if response.status_code == 200:
-    print("✅ Message sent successfully")
-else:
-    print(f"❌ Telegram failed: {response.status_code} - {response.text}")
+try:
+    bot.send_message(TELEGRAM_CHAT_ID, "✅ Test message from Sniper bot is working!")
+    print("✅ Telegram message sent.")
+except Exception as e:
+    print(f"❌ Telegram failed: {e}")
