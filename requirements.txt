@@ -7,3 +7,4 @@ numpy
 ta
 openai
 pyTelegramBotAPI
+python-dotenv
