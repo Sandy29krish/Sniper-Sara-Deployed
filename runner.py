@@ -1,26 +1,27 @@
-# Main runner for Sniper bot
-import traceback
+# runner.py
+
 import time
-from utils.telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
 from strategy_expiry import run_expiry_strategy
-from strategy_swing import run_swing_strategy
+from telegram_commands import start_bot_listener, is_bot_active, get_bot_mode
+import threading
 
-if __name__ == "__main__":
-    try:
-        print("🟢 Sniper bot is starting...")
-
-        # Start Telegram command listener
-        start_bot_listener()
-
-        # Continuous loop to keep both strategies alive
-        while True:
+def main_loop():
+    print("[Runner] Sniper strategy monitor started.")
+    while True:
+        try:
             if is_bot_active():
                 mode = get_bot_mode()
-                if mode == "LIVE":
-                    run_expiry_strategy()
-                    run_swing_strategy()
-            time.sleep(60)  # Adjust frequency as needed
+                print(f"[Runner] Bot is ACTIVE | Mode: {mode}")
+                run_expiry_strategy()
+            else:
+                print("[Runner] Bot is STOPPED. Waiting...")
+            time.sleep(60)  # Check every 1 minute
+        except Exception as e:
+            print(f"[Runner] Error in main loop: {e}")
+            time.sleep(60)
 
-    except Exception as e:
-        print("❌ Fatal error:")
-        traceback.print_exc()
+if __name__ == "__main__":
+    # Start Telegram bot listener in background
+    threading.Thread(target=start_bot_listener).start()
+    time.sleep(5)  # small delay to stabilize listener
+    main_loop()
