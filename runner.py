@@ -4,6 +4,7 @@ import time
 import threading
 from strategy_expiry import run_expiry_strategy
 from utils.telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
+from utils.ai_assistant import explain_trade
 
 def main_loop():
     print("[Runner] Sniper strategy monitor started.")
@@ -25,24 +26,21 @@ if __name__ == "__main__":
     threading.Thread(target=start_bot_listener, daemon=True).start()
     time.sleep(5)  # small delay to stabilize listener
 
+    # ✅ AI-enhanced Telegram startup messages
     try:
         send_telegram_message("✅ Sniper Runner is LIVE and ready.")
+
+        reason = explain_trade("BANKNIFTY", "CE", {
+            "above_200wma": True,
+            "rsi_strong": True,
+            "volume_spike": True,
+            "slope_strong": True,
+            "strength": 4
+        })
+
+        send_telegram_message(f"🧠 AI Trade Setup Context:\n{reason}")
     except Exception as e:
         print(f"[Runner] Telegram alert failed: {e}")
 
+    # Start main loop
     main_loop()
-from utils.ai_assistant import explain_trade
-from utils.telegram_commands import send_telegram_message
-
-# Send startup message
-send_telegram_message("🤖 Sniper Bot Runner has started.")
-
-# Add an AI explanation for context
-reason = explain_trade("BANKNIFTY", "CE", {
-    "above_200wma": True,
-    "rsi_strong": True,
-    "volume_spike": True,
-    "slope_strong": True,
-    "strength": 4
-})
-send_telegram_message(f"🧠 AI Trade Setup Context:\n{reason}")
