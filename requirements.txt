@@ -1,6 +1,8 @@
 pandas
 requests
-python-telegram-bot
 kiteconnect
 pyotp
-pyTelegramBotAPI
+python-telegram-bot==13.15
+numpy
+ta
+openai
