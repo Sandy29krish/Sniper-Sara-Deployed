@@ -5,7 +5,7 @@ from utils.nse_data import fetch_nse_option_chain, get_future_price, get_next_sw
 from utils.learning_engine import learn_from_trade
 from utils.telegram_commands import send_telegram_message
 from utils.trade_logger import log_trade
-from ai_assistant import explain_trade, should_enter_trade
+from utlis.ai_assistant import explain_trade, should_enter_trade
 from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
 def run_swing_strategy():
