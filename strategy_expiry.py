@@ -3,7 +3,7 @@ from utils.indicators import calculate_indicators
 from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
 from utils.nse_data import fetch_nse_option_chain, get_future_price, get_expiry_date
 from utils.learning_engine import learn_from_trade
-from utils.telegram_bot import send_telegram_message
+from utils.telegram_commands import send_telegram_message
 from utils.trade_log import log_trade
 from utils.ai_assistant import explain_trade, learn_from_mistake, should_enter_trade
 from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
