@@ -1,98 +1,62 @@
-# auto_token_refresher.py
-
+import os
+import time
 import pyotp
 import requests
-from urllib.parse import parse_qs, urlparse
-import os
+from kiteconnect import KiteConnect
 
-def generate_totp():
-    secret = os.getenv("ZERODHA_TOTP_SECRET")
-    totp = pyotp.TOTP(secret)
-    return totp.now()
+def generate_totp(secret):
+    return pyotp.TOTP(secret).now()
 
-def auto_login():
+def auto_login_and_get_token():
     try:
-        user_id = os.getenv("ZERODHA_USER_ID")
-        password = os.getenv("ZERODHA_PASSWORD")
-        twofa = generate_totp()
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.common.keys import Keys
 
-        # Zerodha login step
-        session = requests.Session()
-        login_resp = session.post("https://kite.zerodha.com/api/login", data={
-            "user_id": user_id,
-            "password": password
-        })
+        kite = KiteConnect(api_key=os.getenv("KITE_API_KEY"))
+        user_id = os.getenv("USER_ID")
+        password = os.getenv("PASSWORD")
+        totp_secret = os.getenv("TOTP_SECRET")
 
-        if login_resp.status_code != 200:
-            raise Exception("Login request failed")
+        totp = generate_totp(totp_secret)
+        login_url = kite.login_url()
 
-        # Two-factor authentication step
-        twofa_resp = session.post("https://kite.zerodha.com/api/twofa", data={
-            "user_id": user_id,
-            "request_id": login_resp.json().get("data", {}).get("request_id"),
-            "twofa_value": twofa
-        })
+        # Headless Chrome setup
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.get(login_url)
 
-        if twofa_resp.status_code != 200:
-            raise Exception("2FA failed")
+        # Fill login
+        driver.find_element(By.ID, "userid").send_keys(user_id)
+        driver.find_element(By.ID, "password").send_keys(password)
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        time.sleep(2)
 
-        # Get request_token from redirected URL
-        redirect_url = twofa_resp.json().get("data", {}).get("redirect_url")
-        if not redirect_url:
-            raise Exception("No redirect URL after login")
+        # Enter TOTP
+        driver.find_element(By.TAG_NAME, "input").send_keys(totp)
+        driver.find_element(By.XPATH, "//button").click()
+        time.sleep(2)
 
-        parsed_url = urlparse(redirect_url)
-        request_token = parse_qs(parsed_url.query)["request_token"][0]
+        # Get request_token from redirect URL
+        current_url = driver.current_url
+        request_token = current_url.split("request_token=")[1].split("&")[0]
+        driver.quit()
 
-        # Exchange request_token for access_token
-        api_key = os.getenv("ZERODHA_API_KEY")
-        api_secret = os.getenv("ZERODHA_API_SECRET")
-        access_token_resp = requests.post("https://api.kite.trade/session/token", data={
-            "api_key": api_key,
-            "request_token": request_token,
-            "checksum": generate_checksum(api_key, request_token, api_secret)
-        })
+        # Generate access token
+        data = kite.generate_session(request_token, api_secret=os.getenv("KITE_API_SECRET"))
+        access_token = data["access_token"]
 
-        access_token = access_token_resp.json()["data"]["access_token"]
+        # Save to file or environment
         with open("access_token.txt", "w") as f:
             f.write(access_token)
+
         print("[Auto Login] Access token refreshed successfully.")
         return access_token
 
     except Exception as e:
-        print(f"[Auto Login] Failed to auto-login: {e}")
+        print(f"[Auto Login] Failed: {e}")
         return None
-
-def generate_checksum(api_key, request_token, api_secret):
-    import hashlib
-    import hmac
-    payload = f"{api_key}{request_token}{api_secret}"
-    return hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-
-
----
-
-✅ Environment Variables Required:
-
-Variable	Description
-
-ZERODHA_USER_ID	Your Kite ID
-ZERODHA_PASSWORD	Your Kite password
-ZERODHA_TOTP_SECRET	TOTP secret (App code setup key)
-ZERODHA_API_KEY	Zerodha API key
-ZERODHA_API_SECRET	Zerodha API secret
-
-
-
----
-
-🔐 Access Token Location:
-
-Saved to access_token.txt for re-use by kite_connect = KiteConnect(...)
-
-
-
----
-
-Shall I proceed to learning_engine.py, captain? 🧠
-
