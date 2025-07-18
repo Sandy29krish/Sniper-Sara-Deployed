@@ -1,67 +1,108 @@
-import time 
-from utils.indicators import calculate_indicators 
-from utils.lot_manager import calculate_lot_size, get_next_week_expiry_strike 
-from utils.nse_data import get_future_price, get_expiry_date 
-from utils.learning_engine import learn_from_trade 
-from utils.telegram_bot import send_telegram_message 
-from utils.trade_logger import log_trade 
-from config import CAPITAL, SYMBOLS, STRATEGY_MODE
+import time
+from utils.indicators import calculate_indicators
+from utils.lot_manager import calculate_lot_size, filter_otm_option_chain
+from utils.nse_data import fetch_nse_option_chain, get_future_price, get_next_swing_expiry
+from utils.learning_engine import learn_from_trade
+from utils.telegram_commands import send_telegram_message
+from utils.trade_logger import log_trade
+from utils.ai_assistant import explain_trade, should_enter_trade
+from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
-def run_swing_strategy(): print("[Swing Strategy] Initializing...") for symbol in SYMBOLS: try: future_price = get_future_price(symbol) expiry_date = get_expiry_date(symbol, swing=True)  # next week's expiry print(f"[{symbol}] Swing Mode | Expiry: {expiry_date} | Futures: {future_price}")
+def run_swing_strategy():
+    print("[Swing Strategy] Initializing...")
 
-direction, signal_strength = calculate_indicators(symbol, timeframe="15minute", mode="swing")
-        if not direction or signal_strength < 4:
-            print(f"[{symbol}] No strong signal. Skipping.")
-            continue
+    for symbol in SYMBOLS:
+        try:
+            expiry_date = get_next_swing_expiry(symbol)
+            future_price = get_future_price(symbol)
+            print(f"[{symbol}] Swing Expiry: {expiry_date}, Futures: {future_price}")
 
-        strike = get_next_week_expiry_strike(symbol, future_price, direction)
-        entry_price = 60.0  # placeholder; replace with live premium fetch
-        lots = calculate_lot_size(symbol, CAPITAL, entry_price)
+            # Use 15-min timeframe for confirmed swing signal
+            direction, signal_strength = calculate_indicators(symbol, timeframe="15minute", mode="swing")
+            if not direction or signal_strength < 4:
+                print(f"[{symbol}] No strong swing setup. Skipping.")
+                continue
 
-        send_telegram_message(
-            f"📥 Swing Entry: {symbol} {direction} {strike} @ {entry_price} | Lots: {lots}"
-        )
-        log_trade("ENTRY", symbol, direction, strike, entry_price, lots, STRATEGY_MODE)
+            current_conditions = {
+                "symbol": symbol,
+                "direction": direction,
+                "signal_strength": signal_strength
+            }
 
-        monitor_swing_trade(symbol, direction, strike, entry_price, lots)
+            ai_decision = should_enter_trade(current_conditions)
+            if "NO" in ai_decision:
+                print(f"[{symbol}] Rejected by AI: {ai_decision}")
+                continue
 
-    except Exception as e:
-        print(f"[Swing Strategy] Error: {e}")
+            option_chain = fetch_nse_option_chain(symbol)
+            selected_option = filter_otm_option_chain(option_chain, future_price, direction, MAX_PREMIUM, expiry_date)
 
-def monitor_swing_trade(symbol, direction, strike, entry_price, lots): print(f"[Swing Monitor] Watching {symbol} {strike}...") start_time = time.time() reason = ""
+            if not selected_option:
+                print(f"[{symbol}] No valid OTM option found for swing.")
+                continue
 
-while True:
-    try:
-        time.sleep(600)  # 10-minute observation
-        elapsed_minutes = (time.time() - start_time) / 60
-        current_price = get_option_price(symbol, strike, direction)
+            strike = selected_option["strikePrice"]
+            ltp = selected_option["lastPrice"]
+            lots = calculate_lot_size(symbol, CAPITAL, ltp)
 
-        if current_price <= entry_price * 0.7:
-            reason = "Stop Loss Hit"
+            indicators = {
+                "above_200wma": True,
+                "rsi_strong": True,
+                "volume_spike": True,
+                "slope_strong": True,
+                "strength": signal_strength
+            }
 
-        elif current_price >= entry_price * 2.0:
-            reason = "Target Hit (200%)"
+            reasoning = explain_trade(symbol, direction, indicators)
 
-        elif elapsed_minutes >= 1440:  # 1-day holding
-            reason = "Time-based Exit (EOD)"
-
-        elif is_swing_reversal(symbol, direction):
-            reason = "Reversal Detected"
-
-        if reason:
             send_telegram_message(
-                f"🔴 Swing Exit: {symbol} {direction} {strike} @ {current_price} ({reason})"
+                f"📥 SWING ENTRY: {symbol} {direction} {strike} @ {ltp} | Lots: {lots}\n🧠 Reason: {reasoning}"
             )
-            log_trade("FULL EXIT", symbol, direction, strike, current_price, lots, "LIVE", reason=reason)
-            learn_from_trade(symbol, direction, entry_price, current_price, reason, strategy="swing")
-            break
+            log_trade("SWING ENTRY", symbol, direction, strike, ltp, lots, STRATEGY_MODE)
 
-    except Exception as e:
-        print(f"[Swing Monitor] Error: {e}")
+            monitor_swing_trade(symbol, direction, strike, ltp, lots)
 
-=== Placeholders ===
+        except Exception as e:
+            print(f"[Swing Strategy] Error: {e}")
 
-def get_option_price(symbol, strike, direction): return 60.0  # Replace with live API call
 
-def is_swing_reversal(symbol, direction): return False  # Replace with 2-candle pattern logic
+def monitor_swing_trade(symbol, direction, strike, entry_price, lots):
+    print(f"[Monitor] Monitoring swing position for {symbol} {strike}...")
+    stoploss_hit = False
+    full_exit = False
+    reason = ""
+    entry_time = time.time()
 
+    while True:
+        try:
+            time.sleep(900)  # check every 15 minutes
+            current_price = get_option_price(symbol, strike, direction)
+            elapsed_minutes = (time.time() - entry_time) / 60
+
+            if current_price <= entry_price * 0.70:
+                stoploss_hit = True
+                reason = "Swing SL Hit"
+
+            elif current_price >= entry_price * 2.0:
+                full_exit = True
+                reason = "Swing Target Hit (200%)"
+
+            elif elapsed_minutes >= 1440:  # 24 hours
+                full_exit = True
+                reason = "Swing Time Exit (24hr)"
+
+            if stoploss_hit or full_exit:
+                send_telegram_message(
+                    f"🔴 SWING EXIT: {symbol} {direction} {strike} @ {current_price} ({reason})"
+                )
+                log_trade("SWING EXIT", symbol, direction, strike, current_price, lots, "LIVE", reason=reason)
+                learn_from_trade(symbol, direction, entry_price, current_price, reason, strategy="swing")
+                break
+
+        except Exception as e:
+            print(f"[Swing Monitor] Error: {e}")
+
+
+def get_option_price(symbol, strike, direction):
+    # TODO: Replace with live API logic
+    return 60.0
