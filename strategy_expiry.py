@@ -6,7 +6,7 @@ from utils.learning_engine import learn_from_trade
 from utils.telegram_commands import send_telegram_message
 from utils.trade_logger import log_trade
 from ai_assistant import explain_trade, learn_from_mistake, should_enter_trade
-from config import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
+from settings import CAPITAL, MAX_PREMIUM, SYMBOLS, STRATEGY_MODE
 
 
 def run_expiry_strategy():
