@@ -1,25 +1,25 @@
-# utils/telegram_commands.py
-
 import telebot
 import os
 import json
 
 # Load from environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")  # Your Telegram user ID or channel ID
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")  # Telegram User or Channel ID
 
-# Initialize
+# Initialize Telegram Bot
 bot = telebot.TeleBot(BOT_TOKEN)
+
+# Global bot status
 STATUS = {"active": False, "mode": "IDLE"}
 
-# Reusable alert function
+# === Utility: Telegram Message Sender ===
 def send_telegram_message(message):
     try:
         bot.send_message(CHAT_ID, message)
     except Exception as e:
         print(f"[Telegram Error] {e}")
 
-# === Bot Commands ===
+# === Command Handlers ===
 @bot.message_handler(commands=["start_sniper"])
 def start_command(message):
     STATUS["active"] = True
@@ -34,24 +34,28 @@ def stop_command(message):
 
 @bot.message_handler(commands=["status"])
 def status_command(message):
-    msg = f"🤖 Bot Status: {'✅ ACTIVE' if STATUS['active'] else '⛔ STOPPED'}\nMode: {STATUS['mode']}"
-    send_telegram_message(msg)
+    status_msg = (
+        f"🤖 Bot Status: {'✅ ACTIVE' if STATUS['active'] else '⛔ STOPPED'}\n"
+        f"Mode: {STATUS['mode']}"
+    )
+    send_telegram_message(status_msg)
 
 @bot.message_handler(commands=["pnl"])
 def pnl_command(message):
     try:
         with open("trade_log.json", "r") as f:
             data = json.load(f)
-            msg = f"📊 Trades:\n{json.dumps(data, indent=2)}"
-            send_telegram_message(msg)
-    except:
-        send_telegram_message("⚠️ No trade log found or unable to read it.")
+        formatted = json.dumps(data, indent=2)
+        send_telegram_message(f"📊 Trades:\n{formatted}")
+    except Exception as e:
+        send_telegram_message(f"⚠️ Error reading trade log: {e}")
 
-# === External call support ===
+# === Start Listener ===
 def start_bot_listener():
     print("[Telegram] Bot listener started.")
     bot.polling(none_stop=True)
 
+# === Status Accessors for Runner ===
 def is_bot_active():
     return STATUS["active"]
 
