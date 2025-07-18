@@ -1,105 +1,67 @@
-import numpy as np
-import pandas as pd
 import yfinance as yf
+import pandas as pd
+import numpy as np
 
 def calculate_indicators(symbol, timeframe="1minute", mode="expiry"):
-    """
-    Fetch live/historical data and calculate 4-step signal confirmation:
-    1. Price above all MAs including 200 WMA
-    2. RSI > RSI MAs
-    3. Price volume increasing
-    4. LR slope > 30
-    Returns: direction ("CALL"/"PUT") and signal strength (0 to 4)
-    """
-    try:
-        df = fetch_recent_data(symbol, timeframe)
+    interval = "1m" if timeframe == "1minute" else "3m"
+    lookback = "1d"  # Fetch today's data
 
-        if df is None or len(df) < 200:
-            return None, 0
+    yf_symbol = "^NSEBANK" if "BANKNIFTY" in symbol else "^NSEI" if "NIFTY" in symbol else "^BSESN"
+    df = yf.download(yf_symbol, interval=interval, period=lookback, progress=False)
 
-        latest = df.iloc[-1]
-        prev = df.iloc[-2]
-
-        # === STEP 1: Price > All MAs ===
-        price = latest['close']
-        ma_3 = df['ma_3'].iloc[-1]
-        ma_9 = df['ma_9'].iloc[-1]
-        ma_20 = df['ma_20'].iloc[-1]
-        ma_50 = df['ma_50'].iloc[-1]
-        ma_200 = df['ma_200'].iloc[-1]
-
-        price_condition = price > ma_3 > ma_9 > ma_20 > ma_50 > ma_200
-
-        # === STEP 2: RSI > RSI MA ===
-        rsi = latest['rsi']
-        rsi_ma_9 = df['rsi_ma_9'].iloc[-1]
-        rsi_ma_14 = df['rsi_ma_14'].iloc[-1]
-
-        rsi_condition = rsi > rsi_ma_9 > rsi_ma_14
-
-        # === STEP 3: Price volume condition ===
-        volume_strength = (latest['close'] - prev['close']) * latest['volume']
-        price_vol_condition = volume_strength > df['volume'].mean() * 1.2
-
-        # === STEP 4: LR Slope > 30 ===
-        lr_slope = df['lr_slope'].iloc[-1]
-        slope_condition = lr_slope > 30
-
-        # === Combine ===
-        signal_strength = sum([price_condition, rsi_condition, price_vol_condition, slope_condition])
-
-        if signal_strength >= 3:
-            direction = "CALL" if price > prev['close'] else "PUT"
-            return direction, signal_strength
-
-        return None, signal_strength
-
-    except Exception as e:
-        print(f"[Indicators] Error: {e}")
+    if df.empty or len(df) < 30:
         return None, 0
 
+    df["HL2"] = (df["High"] + df["Low"]) / 2
+    df["OHLC4"] = (df["Open"] + df["High"] + df["Low"] + df["Close"]) / 4
 
-def fetch_recent_data(symbol, timeframe):
-    """
-    Placeholder: Replace with live OHLC data fetch via Zerodha/Kite
-    """
-    interval = "1m" if timeframe == "1minute" else "3m"
-    df = yf.download(tickers=f"{symbol}.NS", period="5d", interval=interval, progress=False)
+    # === Moving Averages ===
+    df["MA_3"] = df["OHLC4"].rolling(3).mean()
+    df["MA_9"] = df["OHLC4"].rolling(9).mean()
+    df["MA_20"] = df["OHLC4"].rolling(20).mean()
+    df["MA_50"] = df["High"].ewm(span=50, adjust=False).mean()
+    df["MA_200_WMA"] = df["High"].rolling(200).mean()
 
-    if df.empty:
-        return None
+    # === RSI and RSI MA ===
+    delta = df["OHLC4"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(21).mean()
+    avg_loss = loss.rolling(21).mean()
+    rs = avg_gain / avg_loss
+    df["RSI_21"] = 100 - (100 / (1 + rs))
+    df["RSI_MA_9"] = df["RSI_21"].rolling(9).mean()
+    df["RSI_MA_14"] = df["RSI_21"].rolling(14).mean()
+    df["RSI_MA_26"] = df["RSI_21"].rolling(26).mean()
 
-    df.rename(columns={
-        "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"
-    }, inplace=True)
+    # === Price Volume Strength ===
+    df["Vol_Strength"] = df["Volume"] * df["Close"]
 
-    # === Indicators ===
-    df['ma_3'] = df['close'].rolling(3).mean()
-    df['ma_9'] = df['close'].rolling(9).mean()
-    df['ma_20'] = df['close'].rolling(20).mean()
-    df['ma_50'] = df['close'].rolling(50).mean()
-    df['ma_200'] = df['close'].rolling(200).mean()
+    # === Linear Regression Slope (Price) ===
+    def lr_slope(series):
+        x = np.arange(len(series))
+        if len(series) < 2:
+            return 0
+        A = np.vstack([x, np.ones(len(x))]).T
+        m, _ = np.linalg.lstsq(A, series, rcond=None)[0]
+        return m
 
-    delta = df['close'].diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(21).mean()
-    avg_loss = pd.Series(loss).rolling(21).mean()
-    rs = avg_gain / (avg_loss + 1e-9)
-    df['rsi'] = 100 - (100 / (1 + rs))
-    df['rsi_ma_9'] = df['rsi'].rolling(9).mean()
-    df['rsi_ma_14'] = df['rsi'].rolling(14).mean()
+    df["LR_Slope"] = df["High"].rolling(21).apply(lr_slope, raw=True)
 
-    df['lr_slope'] = df['high'].rolling(21).apply(linear_regression_slope, raw=True)
+    latest = df.iloc[-1]
 
-    return df
+    # === 4-Step Confirmation ===
+    conditions = [
+        latest["Close"] > latest["MA_3"] > latest["MA_9"] > latest["MA_20"] > latest["MA_50"] > latest["MA_200_WMA"],
+        latest["RSI_21"] > latest["RSI_MA_9"] > latest["RSI_MA_14"] > latest["RSI_MA_26"],
+        latest["Vol_Strength"] > df["Vol_Strength"].rolling(20).mean().iloc[-1],
+        latest["LR_Slope"] > 30,
+    ]
 
+    signal_strength = sum(conditions)
 
-def linear_regression_slope(series):
-    y = np.array(series)
-    x = np.arange(len(y))
-    if len(y) < 2:
-        return 0
-    A = np.vstack([x, np.ones(len(x))]).T
-    m, _ = np.linalg.lstsq(A, y, rcond=None)[0]
-    return m * 100  # Convert to scaled value
+    direction = None
+    if signal_strength >= 4:
+        direction = "CE" if latest["Close"] > latest["MA_3"] else "PE"
+
+    return direction, signal_strength
