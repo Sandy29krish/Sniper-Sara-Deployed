@@ -3,7 +3,7 @@
 import time
 import threading
 from strategy_expiry import run_expiry_strategy
-from telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
+from utils.telegram_commands import start_bot_listener, is_bot_active, get_bot_mode, send_telegram_message
 
 def main_loop():
     print("[Runner] Sniper strategy monitor started.")
